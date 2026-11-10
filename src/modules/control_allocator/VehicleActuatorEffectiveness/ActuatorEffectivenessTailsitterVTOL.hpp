@@ -43,6 +43,7 @@
 #include "ActuatorEffectivenessRotors.hpp"
 #include "ActuatorEffectivenessControlSurfaces.hpp"
 
+#include <uORB/topics/manual_control_setpoint.h>
 #include <uORB/topics/normalized_unsigned_setpoint.h>
 
 #include <uORB/Subscription.hpp>
@@ -87,7 +88,16 @@ protected:
 	uint32_t _forwards_motors_mask{};
 
 	int _first_control_surface_idx{0}; ///< applies to matrix 1
+	int _first_tilt_idx{-1}; ///< applies to matrix 0; -1 means tilt assist is not configured
 
+	uORB::Subscription _manual_control_setpoint_sub{ORB_ID(manual_control_setpoint)};
 	uORB::Subscription _flaps_setpoint_sub{ORB_ID(flaps_setpoint)};
 	uORB::Subscription _spoilers_setpoint_sub{ORB_ID(spoilers_setpoint)};
+
+	DEFINE_PARAMETERS(
+		(ParamInt<px4::params::CA_SV_TL_COUNT>) _param_tilt_count,
+		(ParamFloat<px4::params::CA_TS_P_GAIN>) _param_ts_pitch_gain,
+		(ParamFloat<px4::params::CA_TS_Y_GAIN>) _param_ts_yaw_gain,
+		(ParamInt<px4::params::CA_TS_AUX>) _param_ts_aux
+	)
 };

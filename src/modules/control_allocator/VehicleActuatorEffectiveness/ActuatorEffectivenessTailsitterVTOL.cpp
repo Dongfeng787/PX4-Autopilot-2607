@@ -39,7 +39,13 @@
 
 #include "ActuatorEffectivenessTailsitterVTOL.hpp"
 
+#include <drivers/drv_hrt.h>
+#include <lib/mathlib/mathlib.h>
+#include <px4_platform_common/log.h>
+#include <uORB/topics/actuator_servos.h>
+
 using namespace matrix;
+using namespace time_literals;
 
 ActuatorEffectivenessTailsitterVTOL::ActuatorEffectivenessTailsitterVTOL(ModuleParams *parent)
 	: ModuleParams(parent), _mc_rotors(this), _control_surfaces(this)
@@ -64,6 +70,26 @@ ActuatorEffectivenessTailsitterVTOL::getEffectivenessMatrix(Configuration &confi
 	configuration.selected_matrix = 1;
 	_first_control_surface_idx = configuration.num_actuators_matrix[configuration.selected_matrix];
 	const bool surfaces_added_successfully = _control_surfaces.addActuators(configuration);
+
+	// Register the tilt outputs after the control surfaces, preserving their servo numbers.
+	// Their zero effectiveness keeps them out of the native motor allocation.
+	_first_tilt_idx = -1;
+
+	if (_param_tilt_count.get() == 2) {
+		if (configuration.num_actuators[(int)ActuatorType::SERVOS] + 2 > actuator_servos_s::NUM_CONTROLS
+		    || configuration.totalNumActuators() + 2 > NUM_ACTUATORS) {
+			PX4_ERR("tailsitter tilt: too many actuators");
+
+		} else {
+			configuration.selected_matrix = 0;
+			_first_tilt_idx = configuration.num_actuators_matrix[0];
+			configuration.addActuator(ActuatorType::SERVOS, Vector3f{}, Vector3f{});
+			configuration.addActuator(ActuatorType::SERVOS, Vector3f{}, Vector3f{});
+		}
+
+	} else if (_param_tilt_count.get() != 0) {
+		PX4_ERR("tailsitter tilt count must be 0 or 2");
+	}
 
 	return (mc_rotors_added_successfully && surfaces_added_successfully);
 }
@@ -93,6 +119,42 @@ void ActuatorEffectivenessTailsitterVTOL::updateSetpoint(const matrix::Vector<fl
 {
 	if (matrix_index == 0) {
 		stopMaskedMotorsWithZeroThrust(_forwards_motors_mask, actuator_sp);
+
+		if (_first_tilt_idx < 0) {
+			return;
+		}
+
+		manual_control_setpoint_s manual{};
+		float aux = NAN;
+
+		if (_manual_control_setpoint_sub.copy(&manual) && manual.valid && manual.timestamp != 0
+		    && hrt_elapsed_time(&manual.timestamp) < 1_s) {
+			switch (_param_ts_aux.get()) {
+			case 1: aux = manual.aux1; break;
+			case 2: aux = manual.aux2; break;
+			case 3: aux = manual.aux3; break;
+			case 4: aux = manual.aux4; break;
+			case 5: aux = manual.aux5; break;
+			case 6: aux = manual.aux6; break;
+			default: break;
+			}
+		}
+
+		float left = 0.f;
+		float right = 0.f;
+
+		if (_flight_phase != FlightPhase::FORWARD_FLIGHT && PX4_ISFINITE(aux) && aux > 0.5f
+		    && PX4_ISFINITE(control_sp(ControlAxis::PITCH)) && PX4_ISFINITE(control_sp(ControlAxis::YAW))
+		    && PX4_ISFINITE(_param_ts_pitch_gain.get()) && PX4_ISFINITE(_param_ts_yaw_gain.get())) {
+			const float pitch = control_sp(ControlAxis::PITCH) * _param_ts_pitch_gain.get();
+			const float yaw = control_sp(ControlAxis::YAW) * _param_ts_yaw_gain.get();
+			left = pitch - yaw;
+			right = pitch + yaw;
+		}
+
+		actuator_sp(_first_tilt_idx) = math::constrain(left, actuator_min(_first_tilt_idx), actuator_max(_first_tilt_idx));
+		actuator_sp(_first_tilt_idx + 1) = math::constrain(right, actuator_min(_first_tilt_idx + 1),
+								 actuator_max(_first_tilt_idx + 1));
 	}
 }
 

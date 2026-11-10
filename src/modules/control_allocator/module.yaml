@@ -348,6 +348,42 @@ parameters:
             default: 0
 
         # Tilts
+        CA_TS_P_GAIN:
+            description:
+                short: Tailsitter tilt pitch assist gain
+                long: Scales the multicopter pitch torque setpoint for both tilt servos. Zero disables pitch assist.
+            type: float
+            min: 0.0
+            max: 1.0
+            decimal: 2
+            increment: 0.01
+            default: 0.0
+        CA_TS_Y_GAIN:
+            description:
+                short: Tailsitter tilt yaw assist gain
+                long: Scales the multicopter yaw torque setpoint differentially across the tilt servos. Zero disables yaw assist.
+            type: float
+            min: 0.0
+            max: 1.0
+            decimal: 2
+            increment: 0.01
+            default: 0.0
+        CA_TS_AUX:
+            description:
+                short: Tailsitter tilt assist enable channel
+                long: |
+                  Select the manual control AUX channel used to enable tilt assist. The channel must be greater than 0.5.
+                  An unavailable or invalid manual input disables tilt assist and commands neutral.
+            type: enum
+            values:
+                0: Disabled
+                1: AUX 1
+                2: AUX 2
+                3: AUX 3
+                4: AUX 4
+                5: AUX 5
+                6: AUX 6
+            default: 0
         CA_SV_TL_COUNT:
             description:
                 short: Total number of Tilt Servos
@@ -998,6 +1034,18 @@ mixer:
                     parameters:
                       - label: 'Lock control surfaces in hover'
                         name: VT_ELEV_MC_LOCK
+
+                  - actuator_type: 'servo'
+                    group_label: 'Tailsitter Tilt Servos'
+                    count: 'CA_SV_TL_COUNT'
+                    item_label_prefix: 'Tilt ${i}'
+                    parameters:
+                      - label: 'Pitch Assist Gain'
+                        name: CA_TS_P_GAIN
+                      - label: 'Yaw Assist Gain'
+                        name: CA_TS_Y_GAIN
+                      - label: 'Enable AUX Channel'
+                        name: CA_TS_AUX
 
             5: # Rover (Ackermann)
                 title: 'Rover (Ackermann)'
